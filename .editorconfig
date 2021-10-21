@@ -1,0 +1,11 @@
+# install plugin 'EditorConfig' first
+# https://editorconfig.org/
+
+
+# 缩进字符数量
+[{*.kt, *.java, *.xml, *.gradle, *.md, *.json, *.cpp, *.c, *.h, *.sh, *.py, *.txt}]
+indent_size = 3
+
+# 设置单行可显示的最大字符数，超过就换行
+[{*.kt, *.java}]
+max_line_length = 300

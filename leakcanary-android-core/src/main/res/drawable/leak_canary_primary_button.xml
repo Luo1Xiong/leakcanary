@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:state_pressed="true">
+        <shape>
+            <corners android:radius="12dp" />
+            <solid android:color="@color/leak_canary_yellow_button_pressed" />
+        </shape>
+    </item>
+    <item>
+        <shape>
+            <corners android:radius="12dp" />
+            <solid android:color="@color/leak_canary_yellow_button" />
+        </shape>
+    </item>
+</selector>
+

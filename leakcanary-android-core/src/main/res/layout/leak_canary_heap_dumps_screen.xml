@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="20dp"
+        android:layout_marginTop="16dp"
+        android:layout_marginEnd="20dp"
+        android:layout_marginBottom="16dp"
+        android:orientation="horizontal">
+
+        <Button
+            android:id="@+id/leak_canary_import_heap_dump"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginRight="16dp"
+            android:layout_weight="1"
+            android:background="@drawable/leak_canary_primary_button"
+            android:text="@string/leak_canary_import_hprof_file"
+            android:textAllCaps="false"
+            android:textColor="@color/leak_canary_gray_darkest" />
+
+        <Button
+            android:id="@+id/leak_canary_dump_heap_now"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:background="@drawable/leak_canary_secondary_button"
+            android:text="@string/leak_canary_dump_heap"
+            android:textAllCaps="false"
+            android:textColor="@color/leak_canary_gray_lightest" />
+    </LinearLayout>
+
+    <ListView
+        android:id="@+id/leak_canary_list"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:divider="@null"
+        android:dividerHeight="0dp"
+        android:listSelector="@drawable/leak_canary_list_selector" />
+</LinearLayout>
