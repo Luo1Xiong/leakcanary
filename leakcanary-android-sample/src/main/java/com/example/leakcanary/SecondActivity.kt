@@ -34,12 +34,14 @@ class SecondActivity : Activity() {
         FindAllBitmapInfo
     }
 
-    var mImageViewHprof: ImageView? = null
-    var mBitmap: Bitmap? = null
+    private lateinit var mImageViewHprof: ImageView
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.second_activity)
-        mImageViewHprof = findViewById(R.id.iv_hprof)
+        mImageViewHprof = findViewById(R.id.iv_test)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP)
+            mImageViewHprof.setImageDrawable(resources.getDrawable(R.drawable.test, null))
         findViewById<Button>(R.id.analyze).setOnClickListener {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M)
                 checkPermissionAndRun(HprofTask.Analyze)
@@ -182,6 +184,7 @@ class SecondActivity : Activity() {
     }
 
     private fun findBigInstanceInfo() {
+        PathFinder.resetAll()
         val hprofFile = File("/sdcard/testHprof.hprof")
         val proguardMappingFile = File("/sdcard/mapping.txt")
         val proguardMappingInputStream = FileInputStream(proguardMappingFile)
@@ -192,9 +195,9 @@ class SecondActivity : Activity() {
          * 该方法耗时长，需要缓存起来
          */
         mapIdToNativeSizes = AndroidNativeSizeMapper(heapGraph).mapNativeSizes()
-//        topTopCountInstancesReferenceQueue(heapGraph, mapIdToNativeSizes, "android.graphics.Bitmap", 5)
+        topTopCountInstancesReferenceQueue(heapGraph, mapIdToNativeSizes, "android.graphics.Bitmap", 30)
 //        topTopCountInstancesReferenceQueue(heapGraph, mapIdToNativeSizes, "android.app.Activity", 5)
-        topTopCountInstancesReferenceQueue(heapGraph, mapIdToNativeSizes, "android.app.Fragment", 5)
+//        topTopCountInstancesReferenceQueue(heapGraph, mapIdToNativeSizes, "android.app.Fragment", 5)
 //        topTopCountInstancesReferenceQueue(heapGraph, mapIdToNativeSizes,"androidx.fragment.app.Fragment", 5)
     }
 
@@ -305,7 +308,7 @@ class SecondActivity : Activity() {
         /**
          * 集中查找所有实例的引用链，单个查找耗时太长
          */
-        val pathFindingResults: PathFinder.PathFindingResults = pathFinder.findPathsFromGcRoots(instanceIdToInstances.keys, false)
+        val pathFindingResults: PathFinder.PathFindingResults = pathFinder.findPathsFromGcRoots(instanceIdToInstances.keys, true)
         logger("size of pathFindingResults is : ${pathFindingResults.pathsToLeakingObjects.size}")
         val shortestPaths: List<HeapAnalyzer.ShortestPath> = deduplicateShortestPaths(pathFindingResults.pathsToLeakingObjects)
         logger("size of shortestPaths is : ${shortestPaths.size}")

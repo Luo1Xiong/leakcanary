@@ -587,7 +587,7 @@ class HprofInMemoryIndex private constructor(
             val sortedPrimitiveArrayIndex = unsortedByteEntriesOfPrimitiveArray.moveToSortedMap()
             val sortedClassIndex = unsortedByteEntriesOfClass.moveToSortedMap()
             // Passing references to avoid copying the underlying data structures.
-            println("找到的gcRoots数量为:${gcRoots.size}")
+            println("sizeOfVisitAndVisiting >> gcRoot >> :${gcRoots.size}")
             return HprofInMemoryIndex(
                     positionSize = positionSize,
                     hprofStringCache = hprofStringCache,

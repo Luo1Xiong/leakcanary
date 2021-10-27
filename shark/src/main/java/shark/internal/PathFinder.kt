@@ -12,10 +12,7 @@ import shark.OnAnalysisProgressListener.Step.FINDING_PATHS_TO_RETAINED_OBJECTS
 import shark.PrimitiveType.*
 import shark.ReferencePattern.*
 import shark.ValueHolder.ReferenceHolder
-import shark.explanation.Bug
-import shark.explanation.Doc
-import shark.explanation.Todo
-import shark.explanation.Why
+import shark.explanation.*
 import shark.internal.PathFinder.VisitTracker.Dominated
 import shark.internal.PathFinder.VisitTracker.Visited
 import shark.internal.ReferencePathNode.*
@@ -24,9 +21,7 @@ import shark.internal.ReferencePathNode.ChildNode.NormalNode
 import shark.internal.ReferencePathNode.RootNode.LibraryLeakRootNode
 import shark.internal.ReferencePathNode.RootNode.NormalRootNode
 import shark.internal.hppc.LongScatterSet
-import java.util.ArrayDeque
-import java.util.Deque
-import java.util.LinkedHashMap
+import java.util.*
 import kotlin.Boolean
 import kotlin.Byte
 import kotlin.Char
@@ -36,6 +31,7 @@ import kotlin.Float
 import kotlin.Int
 import kotlin.Long
 import kotlin.Short
+import kotlin.collections.ArrayList
 
 /**
  * Not thread safe.
@@ -118,8 +114,7 @@ class PathFinder(
         val toVisitSet = LongScatterSet()
         val toVisitLastSet = LongScatterSet()
 
-        val queuesNotEmpty: Boolean
-            get() = toVisitQueue.isNotEmpty() || toVisitLastQueue.isNotEmpty()
+        val queuesNotEmpty: Boolean get() = toVisitQueue.isNotEmpty() || toVisitLastQueue.isNotEmpty()
 
         val visitTracker = if (computeRetainedHeapSize) {
             Dominated(estimatedVisitedObjects)
@@ -242,11 +237,16 @@ class PathFinder(
         return longScatterSet
     }
 
+    var a = true
     private fun State.findPathsFromGcRoots(): PathFindingResults {
         enqueueGcRoots()
 
         val shortestPathsToLeakingObjects = mutableListOf<ReferencePathNode>()
         visitingQueue@ while (queuesNotEmpty) {
+            if (a) {
+                println("sizeOfVisitAndVisiting:${sizeOfVisitAndVisiting()} | countOfGcRootDoesNotExists:$countOfGcRootDoesNotExists | countOfGcRootCounter:$countOfGcRootCounter | countOfGcRootThatIsNull:$countOfGcRootThatIsNull | countOfGcRootThatIgnored:$countOfGcRootThatIgnored")
+                a = false
+            }
             val node = poll()
             if (leakingObjectIds.contains(node.objectId)) {
                 shortestPathsToLeakingObjects.add(node)
@@ -255,7 +255,6 @@ class PathFinder(
                     if (computeRetainedHeapSize) {
                         listener.onAnalysisProgress(FINDING_DOMINATORS)
                     } else {
-                        println("breaked")
                         break@visitingQueue
                     }
                 }
@@ -266,10 +265,8 @@ class PathFinder(
                 is HeapInstance -> visitInstance(heapObject, node)
                 is HeapObjectArray -> visitObjectArray(heapObject, node)
             }
-            println("breaked after")
         }
-        return PathFindingResults(shortestPathsToLeakingObjects, if (visitTracker is Dominated) visitTracker.dominatorTree else null
-        )
+        return PathFindingResults(shortestPathsToLeakingObjects, if (visitTracker is Dominated) visitTracker.dominatorTree else null)
     }
 
     private fun State.poll(): ReferencePathNode {
@@ -285,18 +282,57 @@ class PathFinder(
         }
     }
 
+    private fun State.sizeOfVisitAndVisiting() = toVisitQueue.size + toVisitLastQueue.size
+
+    @Region("检查gcRoots中的序列")
+    val storage = ArrayList<Int>()
+    private fun checkSortedGcRoots(type: String) {
+        when (type) {
+            "ThreadObject" -> {
+                if (++threadObjectCheckCount <= 100)
+                    storage.add(0)
+            }
+            "JavaFrame" -> {
+                if (++javaFrameCheckCount <= 100)
+                    storage.add(1)
+            }
+            "JniGlobal" -> {
+                if (++jniGlobalCheckCount <= 100)
+                    storage.add(2)
+            }
+            "Others" -> {
+                if (++othersCheckCount <= 100)
+                    storage.add(3)
+            }
+        }
+    }
+
+    private fun endCheck() {
+        // endCheck:[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
+        println("endCheck:" + Arrays.toString(storage.toArray()))
+    }
+
+    private var threadObjectCheckCount = 0
+    private var javaFrameCheckCount = 0
+    private var jniGlobalCheckCount = 0
+    private var othersCheckCount = 0
+
+    @Region("检查gcRoots中的序列")
+
     private fun State.enqueueGcRoots() {
         val gcRoots = sortedGcRoots()
-
         val threadNames = mutableMapOf<HeapInstance, String>()
         val threadsBySerialNumber = mutableMapOf<Int, Pair<HeapInstance, ThreadObject>>()
+        @Important("sortedGcRoots保证了所有的ThreadObject实例都在JavaFrame实例的前面")
         gcRoots.forEach { (objectRecord, gcRoot) ->
             when (gcRoot) {
                 is ThreadObject -> {
+                    checkSortedGcRoots("ThreadObject")
                     threadsBySerialNumber[gcRoot.threadSerialNumber] = objectRecord.asInstance!! to gcRoot
                     enqueue(NormalRootNode(gcRoot.id, gcRoot))
                 }
                 is JavaFrame -> {
+                    checkSortedGcRoots("JavaFrame")
                     val threadPair = threadsBySerialNumber[gcRoot.threadSerialNumber]
                     if (threadPair == null) {
                         // Could not find the thread that this java frame is for.
@@ -336,10 +372,14 @@ class PathFinder(
                                 )
                             }
                             enqueue(childNode)
+                        } else {
+                            println("sizeOfVisitAndVisiting: >> ${objectRecord.objectId} - ${referenceMatcher.pattern}")
+                            countOfGcRootThatIgnored++
                         }
                     }
                 }
                 is JniGlobal -> {
+                    checkSortedGcRoots("JniGlobal")
                     val referenceMatcher = when (objectRecord) {
                         is HeapClass -> jniGlobalReferenceMatchers[objectRecord.name]
                         is HeapInstance -> jniGlobalReferenceMatchers[objectRecord.instanceClassName]
@@ -352,11 +392,36 @@ class PathFinder(
                         } else {
                             enqueue(NormalRootNode(gcRoot.id, gcRoot))
                         }
+                    } else {
+                        println("sizeOfVisitAndVisiting: >> ${objectRecord.objectId} - ${referenceMatcher.pattern}")
+                        countOfGcRootThatIgnored++
                     }
                 }
-                else -> enqueue(NormalRootNode(gcRoot.id, gcRoot))
+                else -> {
+                    checkSortedGcRoots("Others")
+                    enqueue(NormalRootNode(gcRoot.id, gcRoot))
+                }
             }
         }
+        println("sizeOfVisitAndVisiting >> before enqueueGcRoots gcRoots.size:${gcRoots.size} | after enqueueGcRoots countOfGcRootCounter.size:$countOfGcRootCounter | countOfGcRootThatIgnored:$countOfGcRootThatIgnored | countOfGcRootThatSkippedAndAlreadyEnqueued:$countOfGcRootThatSkippedAndAlreadyEnqueued")
+        println("sizeOfVisitAndVisiting >> threadObjectCheckCount:$threadObjectCheckCount javaFrameCheckCount:$javaFrameCheckCount | jniGlobalCheckCount:$jniGlobalCheckCount | othersCheckCount:$othersCheckCount")
+        endCheck()
+    }
+
+    companion object {
+        fun resetAll() {
+            countOfGcRootDoesNotExists = 0
+            countOfGcRootThatIsNull = 0
+            countOfGcRootCounter = 0
+            countOfGcRootThatIgnored = 0
+            countOfGcRootThatSkippedAndAlreadyEnqueued = 0
+        }
+
+        var countOfGcRootDoesNotExists = 0
+        var countOfGcRootThatIsNull = 0
+        var countOfGcRootCounter = 0
+        var countOfGcRootThatIgnored = 0
+        var countOfGcRootThatSkippedAndAlreadyEnqueued = 0
     }
 
     @Why("")
@@ -391,8 +456,10 @@ class PathFinder(
                     // GC roots sometimes reference objects that don't exist in the heap dump
                     // See https://github.com/square/leakcanary/issues/1516
                     val gcRootObjectExists = graph.objectExists(gcRoot.id)
-                    if (!gcRootObjectExists)
+                    if (!gcRootObjectExists) {
                         println("该gcRoot类型实例不存在:${gcRoot::class.java.simpleName}")
+                        ++countOfGcRootDoesNotExists
+                    }
                     gcRootObjectExists
                 } // List<GcRoot>
                 .map { // 将 gcRoot 转化为 Pair<HeapObject, GcRoot>
@@ -601,7 +668,9 @@ class PathFinder(
 
     @Suppress("ReturnCount")
     private fun State.enqueue(node: ReferencePathNode) {
+        countOfGcRootCounter++
         if (node.objectId == ValueHolder.NULL_REFERENCE) {
+            ++countOfGcRootThatIsNull
             return
         }
 
@@ -624,14 +693,17 @@ class PathFinder(
         if (alreadyEnqueued) {
             // Has already been enqueued and would be added to visit last => don't enqueue.
             if (visitLast) {
+                countOfGcRootThatSkippedAndAlreadyEnqueued++
                 return
             }
             // Has already been enqueued and exists in the to visit set => don't enqueue
             if (toVisitSet.contains(node.objectId)) {
+                countOfGcRootThatSkippedAndAlreadyEnqueued++
                 return
             }
             // Has already been enqueued, is not in toVisitSet, is not in toVisitLast => has been visited
             if (!toVisitLastSet.contains(node.objectId)) {
+                countOfGcRootThatSkippedAndAlreadyEnqueued++
                 return
             }
         }
@@ -645,6 +717,7 @@ class PathFinder(
             val nodeToRemove = toVisitLastQueue.first { it.objectId == node.objectId }
             toVisitLastQueue.remove(nodeToRemove)
             toVisitLastSet.remove(node.objectId)
+            countOfGcRootThatSkippedAndAlreadyEnqueued++
             return
         }
 
@@ -683,6 +756,7 @@ class PathFinder(
                 is HeapPrimitiveArray -> true
             }
             if (skip) {
+                countOfGcRootThatSkippedAndAlreadyEnqueued++
                 return
             }
         }

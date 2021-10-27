@@ -17,6 +17,8 @@ class StreamingHprofReader private constructor(
         private val header: HprofHeader
 ) {
 
+    val tagTypes = HashSet<Int>()
+
     /**
      * Obtains a new source to read all hprof records from and calls [listener] back for each record
      * that matches one of the provided [recordTags].
@@ -38,6 +40,7 @@ class StreamingHprofReader private constructor(
             while (!source.exhausted()) {
                 // type of the record
                 val tag = reader.readUnsignedByte()
+                tagTypes.add(tag)
                 // number of microseconds since the time stamp in the header
                 // val serialNumber = reader.readUnsignedInt() // mostly 0, useless, so skip it
                 reader.skip(intByteSize) // similar with reader.readUnsignedInt()
@@ -102,7 +105,6 @@ class StreamingHprofReader private constructor(
                                         reader.skip(identifierByteSize + intByteSize + intByteSize)
                                     }
                                 }
-
                                 ROOT_JAVA_FRAME.tag -> {
                                     if (ROOT_JAVA_FRAME in recordTags) {
                                         listener.onHprofRecord(ROOT_JAVA_FRAME, -1, reader)
@@ -110,7 +112,6 @@ class StreamingHprofReader private constructor(
                                         reader.skip(identifierByteSize + intByteSize + intByteSize)
                                     }
                                 }
-
                                 ROOT_NATIVE_STACK.tag -> {
                                     if (ROOT_NATIVE_STACK in recordTags) {
                                         listener.onHprofRecord(ROOT_NATIVE_STACK, -1, reader)
@@ -118,7 +119,6 @@ class StreamingHprofReader private constructor(
                                         reader.skip(identifierByteSize + intByteSize)
                                     }
                                 }
-
                                 ROOT_STICKY_CLASS.tag -> {
                                     if (ROOT_STICKY_CLASS in recordTags) {
                                         listener.onHprofRecord(ROOT_STICKY_CLASS, -1, reader)
@@ -133,7 +133,6 @@ class StreamingHprofReader private constructor(
                                         reader.skip(identifierByteSize + intByteSize)
                                     }
                                 }
-
                                 ROOT_MONITOR_USED.tag -> {
                                     if (ROOT_MONITOR_USED in recordTags) {
                                         listener.onHprofRecord(ROOT_MONITOR_USED, -1, reader)
@@ -141,7 +140,6 @@ class StreamingHprofReader private constructor(
                                         reader.skip(identifierByteSize)
                                     }
                                 }
-
                                 ROOT_THREAD_OBJECT.tag -> {
                                     if (ROOT_THREAD_OBJECT in recordTags) {
                                         listener.onHprofRecord(ROOT_THREAD_OBJECT, -1, reader)
@@ -149,7 +147,6 @@ class StreamingHprofReader private constructor(
                                         reader.skip(identifierByteSize + intByteSize + intByteSize)
                                     }
                                 }
-
                                 ROOT_INTERNED_STRING.tag -> {
                                     if (ROOT_INTERNED_STRING in recordTags) {
                                         listener.onHprofRecord(ROOT_INTERNED_STRING, -1, reader)
@@ -157,7 +154,6 @@ class StreamingHprofReader private constructor(
                                         reader.skip(identifierByteSize)
                                     }
                                 }
-
                                 ROOT_FINALIZING.tag -> {
                                     if (ROOT_FINALIZING in recordTags) {
                                         listener.onHprofRecord(ROOT_FINALIZING, -1, reader)
@@ -165,7 +161,6 @@ class StreamingHprofReader private constructor(
                                         reader.skip(identifierByteSize)
                                     }
                                 }
-
                                 ROOT_DEBUGGER.tag -> {
                                     if (ROOT_DEBUGGER in recordTags) {
                                         listener.onHprofRecord(ROOT_DEBUGGER, -1, reader)
@@ -173,7 +168,6 @@ class StreamingHprofReader private constructor(
                                         reader.skip(identifierByteSize)
                                     }
                                 }
-
                                 ROOT_REFERENCE_CLEANUP.tag -> {
                                     if (ROOT_REFERENCE_CLEANUP in recordTags) {
                                         listener.onHprofRecord(ROOT_REFERENCE_CLEANUP, -1, reader)
@@ -181,7 +175,6 @@ class StreamingHprofReader private constructor(
                                         reader.skip(identifierByteSize)
                                     }
                                 }
-
                                 ROOT_VM_INTERNAL.tag -> {
                                     if (ROOT_VM_INTERNAL in recordTags) {
                                         listener.onHprofRecord(ROOT_VM_INTERNAL, -1, reader)
@@ -189,7 +182,6 @@ class StreamingHprofReader private constructor(
                                         reader.skip(identifierByteSize)
                                     }
                                 }
-
                                 ROOT_JNI_MONITOR.tag -> {
                                     if (ROOT_JNI_MONITOR in recordTags) {
                                         listener.onHprofRecord(ROOT_JNI_MONITOR, -1, reader)
@@ -197,7 +189,6 @@ class StreamingHprofReader private constructor(
                                         reader.skip(identifierByteSize + intByteSize + intByteSize)
                                     }
                                 }
-
                                 ROOT_UNREACHABLE.tag -> {
                                     if (ROOT_UNREACHABLE in recordTags) {
                                         listener.onHprofRecord(ROOT_UNREACHABLE, -1, reader)
@@ -219,7 +210,6 @@ class StreamingHprofReader private constructor(
                                         reader.skipInstanceDumpRecord()
                                     }
                                 }
-
                                 OBJECT_ARRAY_DUMP.tag -> {
                                     if (OBJECT_ARRAY_DUMP in recordTags) {
                                         listener.onHprofRecord(OBJECT_ARRAY_DUMP, -1, reader)
@@ -227,7 +217,6 @@ class StreamingHprofReader private constructor(
                                         reader.skipObjectArrayDumpRecord()
                                     }
                                 }
-
                                 PRIMITIVE_ARRAY_DUMP.tag -> {
                                     if (PRIMITIVE_ARRAY_DUMP in recordTags) {
                                         listener.onHprofRecord(PRIMITIVE_ARRAY_DUMP, -1, reader)
@@ -235,11 +224,9 @@ class StreamingHprofReader private constructor(
                                         reader.skipPrimitiveArrayDumpRecord()
                                     }
                                 }
-
                                 PRIMITIVE_ARRAY_NODATA.tag -> {
                                     throw UnsupportedOperationException("$PRIMITIVE_ARRAY_NODATA cannot be parsed")
                                 }
-
                                 HEAP_DUMP_INFO.tag -> {
                                     if (HEAP_DUMP_INFO in recordTags) {
                                         listener.onHprofRecord(HEAP_DUMP_INFO, -1, reader)
@@ -269,9 +256,13 @@ class StreamingHprofReader private constructor(
                         }
                     }
                     else -> {
+                        println("find a tagType that not supported: $tag")
                         reader.skip(length)
                     }
                 }
+            }
+            for (tagType in tagTypes) {
+                println("find tagType:${java.lang.Integer.toHexString(tagType)}")
             }
             reader.bytesRead
         }
