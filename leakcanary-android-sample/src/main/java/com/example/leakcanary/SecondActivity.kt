@@ -16,6 +16,7 @@ import androidx.core.content.ContextCompat
 import shark.*
 import shark.HeapAnalyzer.Companion.deduplicateShortestPaths
 import shark.HprofHeapGraph.Companion.openHeapGraph
+import shark.explanation.ForTest
 import shark.internal.AndroidNativeSizeMapper
 import shark.internal.PathFinder
 import shark.internal.ShallowSizeCalculator
@@ -40,8 +41,8 @@ class SecondActivity : Activity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.second_activity)
         mImageViewHprof = findViewById(R.id.iv_test)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP)
-            mImageViewHprof.setImageDrawable(resources.getDrawable(R.drawable.test, null))
+//        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP)
+//            mImageViewHprof.setImageDrawable(resources.getDrawable(R.drawable.test, null))
         findViewById<Button>(R.id.analyze).setOnClickListener {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M)
                 checkPermissionAndRun(HprofTask.Analyze)
@@ -190,7 +191,8 @@ class SecondActivity : Activity() {
         val proguardMappingInputStream = FileInputStream(proguardMappingFile)
         val proguardMappingReader = ProguardMappingReader(proguardMappingInputStream)
         val heapGraph = hprofFile.openHeapGraph(proguardMappingReader.readProguardMapping())
-
+        @ForTest
+        cachedHeapGraph = heapGraph
         /**
          * 该方法耗时长，需要缓存起来
          */
@@ -243,6 +245,8 @@ class SecondActivity : Activity() {
         fun logger(str: String) {
             println("$Tag:$str")
         }
+
+        private var cachedHeapGraph: HeapGraph? = null
     }
 
     private val mapClassNameToHeapClass = ArrayMap<String, HeapObject.HeapClass>()
@@ -309,6 +313,21 @@ class SecondActivity : Activity() {
          * 集中查找所有实例的引用链，单个查找耗时太长
          */
         val pathFindingResults: PathFinder.PathFindingResults = pathFinder.findPathsFromGcRoots(instanceIdToInstances.keys, true)
+
+        /**
+         * 检查支配树里的节点之间的支配关系
+         */
+//        var checkCount = 0
+//        pathFindingResults.dominatorTree?.dominated?.forEach(object : LongLongScatterMap.ForEachCallback {
+//            override fun onEntry(key: Long, value: Long) {
+//                if (++checkCount < 100) {
+//                    val keyName = nameOfHeapObject(heapGraph.findObjectById(key))
+//                    val valueName = nameOfHeapObject(heapGraph.findObjectById(value))
+//                    println("$keyName dominated by $valueName")
+//                }
+//            }
+//        })
+
         logger("size of pathFindingResults is : ${pathFindingResults.pathsToLeakingObjects.size}")
         val shortestPaths: List<HeapAnalyzer.ShortestPath> = deduplicateShortestPaths(pathFindingResults.pathsToLeakingObjects)
         logger("size of shortestPaths is : ${shortestPaths.size}")

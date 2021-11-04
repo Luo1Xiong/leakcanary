@@ -2,8 +2,11 @@
 
 package shark.internal
 
+import shark.HeapGraph
+import shark.HeapObject
 import shark.ValueHolder
 import shark.explanation.Doc
+import shark.explanation.ForTest
 import shark.explanation.Important
 import shark.internal.ObjectDominators.DominatorNode
 import shark.internal.hppc.LongLongScatterMap
@@ -19,13 +22,82 @@ class DominatorTree(expectedElements: Int = 4) {
      * If an object is dominated by more than one GC root then its dominator is set to
      * [ValueHolder.NULL_REFERENCE].
      */
-    private val dominated = LongLongScatterMap(expectedElements)
+    val dominated = LongLongScatterMap(expectedElements)
 
     /**
      * Records that [objectId] is a root.
      */
     fun updateDominatedAsRoot(objectId: Long): Boolean {
         return updateDominated(objectId, ValueHolder.NULL_REFERENCE)
+    }
+
+    private var checkCount = 0
+
+    @ForTest
+    fun nameOfHeapObject(heapObject: HeapObject): String {
+        return when (heapObject) {
+            is HeapObject.HeapClass -> heapObject.asClass.toString()
+            is HeapObject.HeapInstance -> heapObject.asInstance.toString()
+            is HeapObject.HeapObjectArray -> heapObject.asObjectArray.toString()
+            is HeapObject.HeapPrimitiveArray -> heapObject.asPrimitiveArray.toString()
+            else -> "未识别的类型"
+        }
+    }
+
+    @ForTest
+    fun updateDominatedForTest(graph: HeapGraph, objectId: Long, parentObjectId: Long): Boolean {
+        @Important("getSlot() vs getSlotValue()")
+        // get a slot where an objectId should stored at
+        val dominatedSlot = dominated.getSlot(objectId)
+
+        @Important("dominated vs dominator")
+        val hasDominator = dominatedSlot != -1
+        if (!hasDominator || parentObjectId == ValueHolder.NULL_REFERENCE) {
+            dominated[objectId] = parentObjectId
+        } else {
+            // previous saved objectId
+            val currentDominator = dominated.getSlotValue(dominatedSlot)
+
+            @Important("如果旧的dominator是gcRoot，则忽略掉新的dominator")
+            if (currentDominator != ValueHolder.NULL_REFERENCE) {
+                // We're looking for the Lowest Common Dominator between currentDominator and
+                // parentObjectId. We know that currentDominator likely has a shorter dominator path than
+                // parentObjectId since we're exploring the graph with a breadth first search. So we build
+                // a temporary hash set for the dominator path of currentDominator (since it's smaller)
+                // and then go through the dominator path of parentObjectId checking if any id exists
+                // in that hash set.
+                // Once we find either a common dominator or none, we update the map accordingly
+                val currentDominators = LongScatterSet()
+                var dominator = currentDominator
+//                if (++checkCount > 2000)
+//                    println("dominator foot: ${if (dominator == ValueHolder.NULL_REFERENCE) "null" else nameOfHeapObject(graph.findObjectById(dominator))}")
+                while (dominator != ValueHolder.NULL_REFERENCE) {
+                    currentDominators.add(dominator)
+                    val nextDominatorSlot = dominated.getSlot(dominator)
+                    if (nextDominatorSlot == -1) {
+                        throw IllegalStateException("Did not find dominator for $dominator when going through the dominator chain for $currentDominator: $currentDominators")
+                    } else {
+                        dominator = dominated.getSlotValue(nextDominatorSlot)
+//                        if (++checkCount > 2000)
+//                            println("dominator leaf: ${if (dominator == ValueHolder.NULL_REFERENCE) "null" else nameOfHeapObject(graph.findObjectById(dominator))}")
+                    }
+                }
+                dominator = parentObjectId
+                while (dominator != ValueHolder.NULL_REFERENCE) {
+                    if (dominator in currentDominators) {
+                        break
+                    }
+                    val nextDominatorSlot = dominated.getSlot(dominator)
+                    if (nextDominatorSlot == -1) {
+                        throw IllegalStateException("Did not find dominator for $dominator when going through the dominator chain for $parentObjectId")
+                    } else {
+                        dominator = dominated.getSlotValue(nextDominatorSlot)
+                    }
+                }
+                dominated[objectId] = dominator
+            }
+        }
+        return hasDominator
     }
 
     /**
@@ -51,6 +123,7 @@ class DominatorTree(expectedElements: Int = 4) {
         @Important("getSlot() vs getSlotValue()")
         // get a slot where an objectId should stored at
         val dominatedSlot = dominated.getSlot(objectId)
+
         @Important("dominated vs dominator")
         val hasDominator = dominatedSlot != -1
         if (!hasDominator || parentObjectId == ValueHolder.NULL_REFERENCE) {

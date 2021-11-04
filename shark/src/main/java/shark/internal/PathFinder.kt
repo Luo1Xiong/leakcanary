@@ -54,6 +54,7 @@ class PathFinder(
     sealed class VisitTracker {
 
         abstract fun visited(
+                graph: HeapGraph,
                 objectId: Long,
                 parentObjectId: Long
         ): Boolean
@@ -70,10 +71,11 @@ class PathFinder(
              */
             val dominatorTree = DominatorTree(expectedElements)
             override fun visited(
+                    graph: HeapGraph,
                     objectId: Long,
                     parentObjectId: Long
             ): Boolean {
-                return dominatorTree.updateDominated(objectId, parentObjectId)
+                return dominatorTree.updateDominatedForTest(graph, objectId, parentObjectId)
             }
         }
 
@@ -83,6 +85,7 @@ class PathFinder(
              */
             private val visitedSet = LongScatterSet(expectedElements)
             override fun visited(
+                    graph: HeapGraph,
                     objectId: Long,
                     parentObjectId: Long
             ): Boolean {
@@ -142,14 +145,12 @@ class PathFinder(
         val jniGlobals = mutableMapOf<String, ReferenceMatcher>()
 
         val appliedRefMatchers = referenceMatchers.filter {
-            (it is IgnoredReferenceMatcher || (it is LibraryLeakReferenceMatcher && it.patternApplies(
-                    graph
-            )))
+            (it is IgnoredReferenceMatcher || (it is LibraryLeakReferenceMatcher && it.patternApplies(graph)))
         }
 
         appliedRefMatchers.forEach { referenceMatcher ->
             when (val pattern = referenceMatcher.pattern) {
-                is ReferencePattern.JavaLocalPattern -> {
+                is JavaLocalPattern -> {
                     threadNames[pattern.threadName] = referenceMatcher
                 }
                 is StaticFieldPattern -> {
@@ -340,6 +341,7 @@ class PathFinder(
                     } else {
                         val (threadInstance, threadRoot) = threadPair
                         val threadName = threadNames[threadInstance] ?: {
+                            // heapInstance.read(class,)
                             val name = threadInstance[Thread::class, "name"]?.value?.readAsJavaString() ?: ""
                             threadNames[threadInstance] = name
                             name
@@ -688,7 +690,7 @@ class PathFinder(
             (node as ChildNode).parent.objectId
         }
 
-        val alreadyEnqueued = visitTracker.visited(node.objectId, parentObjectId)
+        val alreadyEnqueued = visitTracker.visited(graph, node.objectId, parentObjectId)
 
         if (alreadyEnqueued) {
             // Has already been enqueued and would be added to visit last => don't enqueue.
