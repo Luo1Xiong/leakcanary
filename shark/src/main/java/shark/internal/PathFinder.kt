@@ -7,6 +7,7 @@ import shark.GcRoot.*
 import shark.HeapObject.*
 import shark.HprofRecord.HeapDumpRecord.ObjectRecord.ClassDumpRecord.FieldRecord
 import shark.LeakTraceReference.ReferenceType.*
+import shark.Logger.Companion.logAnalyzeFlow
 import shark.OnAnalysisProgressListener.Step.FINDING_DOMINATORS
 import shark.OnAnalysisProgressListener.Step.FINDING_PATHS_TO_RETAINED_OBJECTS
 import shark.PrimitiveType.*
@@ -276,6 +277,7 @@ class PathFinder(
             toVisitSet.remove(removedNode.objectId)
             removedNode
         } else {
+            logAnalyzeFlow("start visiting last")
             visitingLast = true
             val removedNode = toVisitLastQueue.poll()
             toVisitLastSet.remove(removedNode.objectId)

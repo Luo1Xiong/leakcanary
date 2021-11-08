@@ -16,6 +16,7 @@ import androidx.core.content.ContextCompat
 import shark.*
 import shark.HeapAnalyzer.Companion.deduplicateShortestPaths
 import shark.HprofHeapGraph.Companion.openHeapGraph
+import shark.Logger.Companion.logStatistics
 import shark.explanation.ForTest
 import shark.internal.AndroidNativeSizeMapper
 import shark.internal.PathFinder
@@ -41,8 +42,8 @@ class SecondActivity : Activity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.second_activity)
         mImageViewHprof = findViewById(R.id.iv_test)
-//        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP)
-//            mImageViewHprof.setImageDrawable(resources.getDrawable(R.drawable.test, null))
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP)
+            mImageViewHprof.setImageDrawable(resources.getDrawable(R.drawable.test, null))
         findViewById<Button>(R.id.analyze).setOnClickListener {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M)
                 checkPermissionAndRun(HprofTask.Analyze)
@@ -191,6 +192,7 @@ class SecondActivity : Activity() {
         val proguardMappingInputStream = FileInputStream(proguardMappingFile)
         val proguardMappingReader = ProguardMappingReader(proguardMappingInputStream)
         val heapGraph = hprofFile.openHeapGraph(proguardMappingReader.readProguardMapping())
+        Logger.logAnalyzeFlow("buildFullDominatorTree: dominated.size is ${heapGraph.path .size}")
         @ForTest
         cachedHeapGraph = heapGraph
         /**
@@ -204,7 +206,6 @@ class SecondActivity : Activity() {
     }
 
     companion object {
-        const val Tag = "hprofStatistics"
         lateinit var mapIdToNativeSizes: Map<Long, Int>
         private val cachedTabs = ArrayMap<Int, String>()
 
@@ -240,10 +241,6 @@ class SecondActivity : Activity() {
         fun calculateShallowSizeOfObjectId(heapGraph: HeapGraph, objectId: Long): Int {
             if (shallowSizeCalculator == null) shallowSizeCalculator = ShallowSizeCalculator(heapGraph)
             return (shallowSizeCalculator as ShallowSizeCalculator).computeShallowSize(objectId)
-        }
-
-        fun logger(str: String) {
-            println("$Tag:$str")
         }
 
         private var cachedHeapGraph: HeapGraph? = null
@@ -289,7 +286,7 @@ class SecondActivity : Activity() {
         }
         val allInstanceIdWithSizes = instanceIdToSizes.values.sortedWith(RetainedSizeComparator())
 
-        logger("find ${allInstancesOfThisClass.size} instances of $className")
+        logStatistics("find ${allInstancesOfThisClass.size} instances of $className")
 
         /**
          * 找到topTopCount实例的引用链
@@ -306,7 +303,7 @@ class SecondActivity : Activity() {
     }
 
     private fun referenceQueueOfInstance(heapGraph: HeapGraph, pathFinder: PathFinder, instanceIdToInstances: ArrayMap<Long, InstanceInfo>) {
-        logger("size of instanceIdToInstances is : ${instanceIdToInstances.size}")
+        logStatistics("size of instanceIdToInstances is : ${instanceIdToInstances.size}")
         val hprofInMemoryIndex = (heapGraph as HprofHeapGraph).index
 
         /**
@@ -328,9 +325,9 @@ class SecondActivity : Activity() {
 //            }
 //        })
 
-        logger("size of pathFindingResults is : ${pathFindingResults.pathsToLeakingObjects.size}")
+        logStatistics("size of pathFindingResults is : ${pathFindingResults.pathsToLeakingObjects.size}")
         val shortestPaths: List<HeapAnalyzer.ShortestPath> = deduplicateShortestPaths(pathFindingResults.pathsToLeakingObjects)
-        logger("size of shortestPaths is : ${shortestPaths.size}")
+        logStatistics("size of shortestPaths is : ${shortestPaths.size}")
 
         shortestPaths.forEach { shortestPath ->
             val referenceQueue = InstanceInfo.ReferenceQueue<String>()
@@ -365,7 +362,7 @@ class SecondActivity : Activity() {
         val allInstanceInfo: List<InstanceInfo> = instanceIdToInstances.values.sortedWith(InstanceInfoComparator())
 
         for (value in allInstanceInfo) {
-            logger(value.toString())
+            logStatistics(value.toString())
         }
     }
 
@@ -387,7 +384,7 @@ class SecondActivity : Activity() {
             override fun toString(): String {
                 var result = ""
                 forEachIndexed { idx, str ->
-                    result += "$Tag:" + getTabsForIdx(idx) + str
+                    result += "hprofStatistics:" + getTabsForIdx(idx) + str
                 }
                 return result
             }

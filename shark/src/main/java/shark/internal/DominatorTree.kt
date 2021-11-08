@@ -4,10 +4,12 @@ package shark.internal
 
 import shark.HeapGraph
 import shark.HeapObject
+import shark.Logger
 import shark.ValueHolder
 import shark.explanation.Doc
 import shark.explanation.ForTest
 import shark.explanation.Important
+import shark.explanation.Why
 import shark.internal.ObjectDominators.DominatorNode
 import shark.internal.hppc.LongLongScatterMap
 import shark.internal.hppc.LongLongScatterMap.ForEachCallback
@@ -103,7 +105,7 @@ class DominatorTree(expectedElements: Int = 4) {
     /**
      * Records that [objectId] can be reached through [parentObjectId], updating the dominator for
      * [objectId] to be either [parentObjectId] if [objectId] has no known dominator and otherwise to
-     * the Lowest(树层级最top的) Common Dominator between [parentObjectId] and the previously determined dominator
+     * the Lowest Common Dominator between [parentObjectId] and the previously determined dominator
      * for [objectId].
      *
      * [parentObjectId] should already have been added via [updateDominatedAsRoot]. Failing to do
@@ -116,6 +118,8 @@ class DominatorTree(expectedElements: Int = 4) {
      *
      * @return true if [objectId] already had a known dominator, false otherwise.
      */
+    @Important("支配者在上，被支配者在下")
+    @Why("注释第一行？为什么默认previously determined dominator所在的支配链路一定能和parentObjectId重合？")
     fun updateDominated(
             objectId: Long,
             parentObjectId: Long
