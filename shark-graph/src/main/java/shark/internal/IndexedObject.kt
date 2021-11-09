@@ -10,8 +10,8 @@ sealed class IndexedObject {
             override val position: Long,
             val superclassId: Long,
             val instanceSize: Int,
-            override val recordSize: Long,
-            val fieldsIndex: Int
+            override val recordSize: Long, // totalSize
+            val fieldsIndex: Int           // how many binary will use of fields , totalSize > fieldsIndex
     ) : IndexedObject()
 
     class IndexedInstance(

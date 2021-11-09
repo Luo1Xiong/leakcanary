@@ -192,7 +192,11 @@ class SecondActivity : Activity() {
         val proguardMappingInputStream = FileInputStream(proguardMappingFile)
         val proguardMappingReader = ProguardMappingReader(proguardMappingInputStream)
         val heapGraph = hprofFile.openHeapGraph(proguardMappingReader.readProguardMapping())
-        Logger.logAnalyzeFlow("buildFullDominatorTree: dominated.size is ${heapGraph.path .size}")
+        @ForTest
+        logStatistics("class size: ${heapGraph.classCount}")
+        logStatistics("class size: ${heapGraph.instanceCount}")
+
+//        Logger.logAnalyzeFlow("buildFullDominatorTree: dominated.size is ${heapGraph.path .size}")
         @ForTest
         cachedHeapGraph = heapGraph
         /**

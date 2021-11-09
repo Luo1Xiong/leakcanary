@@ -28,7 +28,7 @@ internal class UnsortedByteEntries(
     private var subArrayIndex = 0
 
     @Doc("10.**下次**将要写入的entry的index")
-    private var assigned: Int = 0
+    var assigned: Int = 0
     private var currentCapacity = 0
 
     fun append(
@@ -78,9 +78,7 @@ internal class UnsortedByteEntries(
         } else entries
         this.entries = null
         assigned = 0
-        return SortedBytesMap(
-                longIdentifiers, bytesPerValue, sortedEntries
-        )
+        return SortedBytesMap(longIdentifiers, bytesPerValue, sortedEntries)
     }
 
     private fun readInt(

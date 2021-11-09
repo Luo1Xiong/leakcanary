@@ -15,22 +15,22 @@ import kotlin.math.max
  * This class is not thread safe, should be used from a single thread.
  */
 class HprofInMemoryIndex private constructor(
-        private val positionSize: Int,
-        private val hprofStringCache: LongObjectScatterMap<String>,
-        private val classNames: LongLongScatterMap,
-        private val classIndex: SortedBytesMap,
-        private val instanceIndex: SortedBytesMap,
-        private val objectArrayIndex: SortedBytesMap,
-        private val primitiveArrayIndex: SortedBytesMap,
-        private val gcRoots: List<GcRoot>,
-        private val proguardMapping: ProguardMapping?,
-        private val bytesForClassSize: Int,
+        private val positionSize: Int,                              // 存储读完hprof的总byteSize（等于.hprof文件的大小）需要用的位数
+        private val hprofStringCache: LongObjectScatterMap<String>, // 所有stringId - string，包含了.hprof中所有的string，后续的string都根据每个record中的stringId从该map中读取
+        private val classNames: LongLongScatterMap,                 // 所有classId - classNameStringId
+        private val classIndex: SortedBytesMap,                     // 所有class，每个class先写入的是它的id，按照id排序（方便二分查找）
+        private val instanceIndex: SortedBytesMap,                  // 所有instance，每个instance先写入的是它的id，按照id排序（方便二分查找）
+        private val objectArrayIndex: SortedBytesMap,               // 所有objectArray，每个objectArray先写入的是它的id，按照id排序（方便二分查找）
+        private val primitiveArrayIndex: SortedBytesMap,            // 所有primitiveArray，每个primitiveArray先写入的是它的id，按照id排序（方便二分查找）
+        private val gcRoots: List<GcRoot>,                          // 所有gcRoot
+        private val proguardMapping: ProguardMapping?,              // 根据mapping.txt生成，解混淆用
+        private val bytesForClassSize: Int,                         // 存储每个class需要的位数，等于存储最大的class需要的位数（方便直接用下标访问）
         private val bytesForInstanceSize: Int,
         private val bytesForObjectArraySize: Int,
         private val bytesForPrimitiveArraySize: Int,
-        private val useForwardSlashClassPackageSeparator: Boolean,
+        private val useForwardSlashClassPackageSeparator: Boolean,  // JVM heap dumps use "/" for package separators (vs "." for Android heap dumps)
         val classFieldsReader: ClassFieldsReader,
-        private val classFieldsIndexSize: Int
+        private val classFieldsIndexSize: Int                       // 存储所有class(非instance)成员变量总和的byteSize需要的位数
 ) {
 
     val classCount: Int get() = classIndex.size
@@ -293,34 +293,34 @@ class HprofInMemoryIndex private constructor(
         /**
          * class id to string id
          */
-        private val classNames = LongLongScatterMap(expectedElements = classCount)
+        val classNames = LongLongScatterMap(expectedElements = classCount)
 
-        private val classFieldBytes = ByteArray(classFieldsTotalBytes)
+        val classFieldBytes = ByteArray(classFieldsTotalBytes)
 
-        private var classFieldsIndex = 0
+        var classFieldsIndex = 0
 
-        private val unsortedByteEntriesOfClass = UnsortedByteEntries(
+        val unsortedByteEntriesOfClass = UnsortedByteEntries(
                 bytesPerValue = positionSize + identifierSize + 4 + bytesForClassSize + classFieldsIndexSize,
                 longIdentifiers = longIdentifiers,
                 initialCapacity = classCount
         )
-        private val unsortedByteEntriesOfInstance = UnsortedByteEntries(
+        val unsortedByteEntriesOfInstance = UnsortedByteEntries(
                 bytesPerValue = positionSize + identifierSize + bytesForInstanceSize,
                 longIdentifiers = longIdentifiers,
                 initialCapacity = instanceCount
         )
-        private val unsortedByteEntriesOfObjectArray = UnsortedByteEntries(
+        val unsortedByteEntriesOfObjectArray = UnsortedByteEntries(
                 bytesPerValue = positionSize + identifierSize + bytesForObjectArraySize,
                 longIdentifiers = longIdentifiers,
                 initialCapacity = objectArrayCount
         )
-        private val unsortedByteEntriesOfPrimitiveArray = UnsortedByteEntries(
+        val unsortedByteEntriesOfPrimitiveArray = UnsortedByteEntries(
                 bytesPerValue = positionSize + 1 + bytesForPrimitiveArraySize,
                 longIdentifiers = longIdentifiers,
                 initialCapacity = primitiveArrayCount
         )
 
-        private val gcRoots = mutableListOf<GcRoot>()
+        val gcRoots = mutableListOf<GcRoot>()
 
         private fun HprofRecordReader.copyToClassFields(byteCount: Int) {
             for (i in 1..byteCount) {
@@ -706,6 +706,7 @@ class HprofInMemoryIndex private constructor(
                     bytesForPrimitiveArraySize = bytesForPrimitiveArraySize,
                     classFieldsTotalBytes = classFieldsTotalBytes
             )
+//            println("bytesRead:$bytesRead")
 //            PrettyLogger.commonLog(classCount, instanceCount, objectArrayCount, primitiveArrayCount)
             val recordTypes = EnumSet.of(
                     STRING_IN_UTF8,
@@ -719,6 +720,7 @@ class HprofInMemoryIndex private constructor(
             @Doc("3.第二次调用reader.readRecords，回调给indexBuilderListener")
             reader.readRecords(recordTypes, indexBuilderListener)
 
+            println("classNames:${indexBuilderListener.classNames.size} unsortedByteEntriesOfClass:${indexBuilderListener.unsortedByteEntriesOfClass.assigned}")
 //            indexBuilderListener.logId2String()
 //            checkIds(indexBuilderListener)
             return indexBuilderListener.buildIndex(proguardMapping, hprofHeader)
