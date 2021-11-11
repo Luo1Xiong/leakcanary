@@ -2,10 +2,12 @@ package shark
 
 import shark.LeakTrace.Companion.ZERO_WIDTH_SPACE
 import shark.LeakTraceObject.LeakingStatus
-import shark.LeakTraceObject.LeakingStatus.*
+import shark.LeakTraceObject.LeakingStatus.LEAKING
+import shark.LeakTraceObject.LeakingStatus.NOT_LEAKING
+import shark.LeakTraceObject.LeakingStatus.UNKNOWN
 import shark.internal.lastSegment
 import java.io.Serializable
-import java.util.*
+import java.util.Locale
 import kotlin.math.ln
 import kotlin.math.pow
 
@@ -72,8 +74,9 @@ data class LeakTraceObject(
         }
 
         if (retainedHeapByteSize != null) {
-            val humanReadableRetainedHeapSize = humanReadableByteCount(retainedHeapByteSize.toLong())
-            result += "\n${additionalLinesPrefix}啊哈哈哈哈哈哈Retaining $humanReadableRetainedHeapSize in $retainedObjectCount objects"
+            val humanReadableRetainedHeapSize =
+                    humanReadableByteCount(retainedHeapByteSize.toLong())
+            result += "\n${additionalLinesPrefix}Retaining $humanReadableRetainedHeapSize in $retainedObjectCount objects"
         }
         for (label in labels) {
             result += "\n${additionalLinesPrefix}$label"

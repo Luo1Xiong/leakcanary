@@ -18,6 +18,7 @@ import shark.*
 import shark.HeapAnalyzer.Companion.deduplicateShortestPaths
 import shark.Logger.Companion.logStatistics
 import shark.explanation.ForTest
+import shark.internal.IndexedObject
 import shark.internal.PathFinder
 import shark.internal.ShallowSizeCalculator
 import java.io.File
@@ -214,7 +215,7 @@ class SecondActivity : Activity() {
         for (viewId in viewIds) {
             instanceList.add(hprofUtility.heapGraph.findObjectById(viewId) as HeapObject.HeapInstance)
         }
-        referenceQueues(hprofUtility.heapGraph, hprofUtility.pathFinder, "android.view.View", hprofUtility.mapIdToNativeSizes, instanceList)
+        referenceQueues(hprofUtility.heapGraph, hprofUtility.pathFinder, null, hprofUtility.mapIdToNativeSizes, instanceList)
     }
 
     private fun findInstancesOfClass() {
@@ -244,7 +245,7 @@ class SecondActivity : Activity() {
      * @Why("多个className同时分析可能导致引用链查找失败")
      * private fun topTopCountInstancesReferenceQueue(heapGraph: HeapGraph, classNames: List<String>, mapIdToSizes: Map<Long, Int>, topCount: Int) {
      */
-    private fun referenceQueues(heapGraph: HeapGraph, pathFinder: PathFinder, className: String, mapIdToNativeSizes: Map<Long, Int>, heapInstanceList: ArrayList<HeapObject.HeapInstance>, topCount: Int = -1, needSort: Boolean = false) {
+    private fun referenceQueues(heapGraph: HeapGraph, pathFinder: PathFinder, className: String?, mapIdToNativeSizes: Map<Long, Int>, heapInstanceList: ArrayList<HeapObject.HeapInstance>, topCount: Int = -1, needSort: Boolean = false) {
         val instanceIdToInstances = ArrayMap<Long, InstanceInfo>()
 
         for (instance in heapInstanceList) {
@@ -272,7 +273,12 @@ class SecondActivity : Activity() {
                 return@forEachIndexed
             }
             val instanceId = instanceIdWithSizes.objectId
-            instanceIdToInstances[instanceId] = InstanceInfo(topIndex = idx, className = className, objectId = instanceIdWithSizes.objectId, nativeSize = instanceIdWithSizes.nativeSize, shallowSize = instanceIdWithSizes.shallowSize, retainedSize = instanceIdWithSizes.retainedSize)
+            var realClassName = className
+            if (realClassName !is String) {
+                val classId = ((heapGraph as HprofHeapGraph).index.indexedObjectOrNull(instanceId)?.second as IndexedObject.IndexedInstance).classId
+                realClassName = heapGraph.index.className(classId)
+            }
+            instanceIdToInstances[instanceId] = InstanceInfo(topIndex = idx, className = realClassName, objectId = instanceIdWithSizes.objectId, nativeSize = instanceIdWithSizes.nativeSize, shallowSize = instanceIdWithSizes.shallowSize, retainedSize = instanceIdWithSizes.retainedSize)
         }
 
         referenceQueueOfInstance(heapGraph, pathFinder, instanceIdToInstances)
