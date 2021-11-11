@@ -153,10 +153,6 @@ internal class UnsortedByteEntries(
             values[pos] = (value and 0xff).toByte()
         }
 
-        /*
-         * 写入截断的long类型，节省内存
-         * byteCount: 该long类型实际占用的字节数
-         */
         fun writeTruncatedLong(
                 value: Long,
                 byteCount: Int

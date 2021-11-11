@@ -19,8 +19,8 @@ import shark.AndroidObjectInspectors.Companion.appDefaults
 import shark.AndroidServices.aliveAndroidServiceObjectIds
 import shark.FilteringLeakingObjectFinder.LeakingObjectFilter
 import shark.HeapObject.HeapInstance
+import shark.explanation.ForTest
 import shark.explanation.KApi
-import shark.explanation.Todo
 import shark.explanation.Why
 import java.util.*
 import kotlin.math.absoluteValue
@@ -44,6 +44,8 @@ enum class AndroidObjectInspectors : ObjectInspector {
     VIEW {
         override val leakingObjectFilter = { heapObject: HeapObject ->
             if (heapObject is HeapInstance && heapObject instanceOf "android.view.View") {
+                checkingViewIds.add(heapObject.objectId)
+                println("hprofStatistics: >> ${heapObject.objectId}")
                 // Leaking if null parent or non view parent.
                 val viewParent = heapObject["android.view.View", "mParent"]!!.valueAsInstance
                 val isParentlessView = viewParent == null
@@ -756,6 +758,9 @@ enum class AndroidObjectInspectors : ObjectInspector {
     internal open val leakingObjectFilter: ((heapObject: HeapObject) -> Boolean)? = null
 
     companion object {
+        @ForTest
+        val checkingViewIds = arrayListOf<Long>()
+
         /** @see AndroidObjectInspectors */
         val appDefaults: List<ObjectInspector>
             get() = ObjectInspectors.jdkDefaults + values()

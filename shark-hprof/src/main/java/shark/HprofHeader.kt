@@ -68,14 +68,6 @@ data class HprofHeader(
             source.skip(1)
             val identifierByteSize = source.readInt()
             val heapDumpTimestamp = source.readLong()
-            val heapDumpTimestampEnd = source.readLong()
-
-//            println(endOfVersionString)
-//            println(versionName)
-//            println(version)
-//            println(identifierByteSize)
-//            println(heapDumpTimestamp)
-//            println(heapDumpTimestampEnd)
 
             return HprofHeader(heapDumpTimestamp, version, identifierByteSize)
         }

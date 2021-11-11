@@ -15,7 +15,7 @@ import kotlin.math.max
  * This class is not thread safe, should be used from a single thread.
  */
 class HprofInMemoryIndex private constructor(
-        private val positionSize: Int,                              // 存储读完hprof的总byteSize（等于.hprof文件的大小）需要用的位数
+        private val positionSize: Int,                              // 存储读完hprof的总byteSize（等于.hprof文件的大小）需要用的字节数
         private val hprofStringCache: LongObjectScatterMap<String>, // 所有stringId - string，包含了.hprof中所有的string，后续的string都根据每个record中的stringId从该map中读取
         private val classNames: LongLongScatterMap,                 // 所有classId - classNameStringId
         private val classIndex: SortedBytesMap,                     // 所有class，每个class先写入的是它的id，按照id排序（方便二分查找）
@@ -24,13 +24,13 @@ class HprofInMemoryIndex private constructor(
         private val primitiveArrayIndex: SortedBytesMap,            // 所有primitiveArray，每个primitiveArray先写入的是它的id，按照id排序（方便二分查找）
         private val gcRoots: List<GcRoot>,                          // 所有gcRoot
         private val proguardMapping: ProguardMapping?,              // 根据mapping.txt生成，解混淆用
-        private val bytesForClassSize: Int,                         // 存储每个class需要的位数，等于存储最大的class需要的位数（方便直接用下标访问）
+        private val bytesForClassSize: Int,                         // 存储每个class需要的字节数，等于存储最大的class需要的字节数（方便直接用下标访问）
         private val bytesForInstanceSize: Int,
         private val bytesForObjectArraySize: Int,
         private val bytesForPrimitiveArraySize: Int,
         private val useForwardSlashClassPackageSeparator: Boolean,  // JVM heap dumps use "/" for package separators (vs "." for Android heap dumps)
         val classFieldsReader: ClassFieldsReader,
-        private val classFieldsIndexSize: Int                       // 存储所有class(非instance)成员变量总和的byteSize需要的位数
+        private val classFieldsIndexSize: Int                       // 存储所有class(非instance)成员变量总和的byteSize需要的字节数
 ) {
 
     val classCount: Int get() = classIndex.size
@@ -580,8 +580,6 @@ class HprofInMemoryIndex private constructor(
                 "Read $classFieldsIndex into fields bytes instead of expected ${classFieldBytes.size}"
             }
 
-            @Important("下面的四个序列保存了hprof中的所有对象实例，即使是gcRoot对象也保存在这里，标识为gcRoot的16个tag，" +
-                    "只是保存了gcRoot的id等两三个必要信息，其他的信息都存放在下面四个序列中，可以根据gcRoot的id从这四个序列中找到具体的对象")
             val sortedInstanceIndex = unsortedByteEntriesOfInstance.moveToSortedMap()
             val sortedObjectArrayIndex = unsortedByteEntriesOfObjectArray.moveToSortedMap()
             val sortedPrimitiveArrayIndex = unsortedByteEntriesOfPrimitiveArray.moveToSortedMap()

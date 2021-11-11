@@ -13,16 +13,14 @@ import android.widget.ImageView
 import androidx.annotation.RequiresApi
 import androidx.collection.ArrayMap
 import androidx.core.content.ContextCompat
+import com.example.leakcanary.HprofUtility.Companion.getHprofUtility
 import shark.*
 import shark.HeapAnalyzer.Companion.deduplicateShortestPaths
-import shark.HprofHeapGraph.Companion.openHeapGraph
 import shark.Logger.Companion.logStatistics
 import shark.explanation.ForTest
-import shark.internal.AndroidNativeSizeMapper
 import shark.internal.PathFinder
 import shark.internal.ShallowSizeCalculator
 import java.io.File
-import java.io.FileInputStream
 import java.io.FileOutputStream
 import java.io.IOException
 import java.nio.charset.StandardCharsets
@@ -30,10 +28,45 @@ import java.util.*
 import kotlin.collections.ArrayList
 
 class SecondActivity : Activity() {
-    enum class HprofTask {
-        Analyze,
-        CreateBitmap,
-        FindAllBitmapInfo
+
+    companion object {
+        @ForTest
+        var cachedImageView: ImageView? = null
+        private val cachedTabs = ArrayMap<Int, String>()
+
+        private fun buildTabsForIdx(idx: Int): String {
+            var result = ""
+            for (i in 0 until idx)
+                result += " "
+            return "$result↳"
+        }
+
+        fun getTabsForIdx(idx: Int): String {
+            var cachedStr = cachedTabs[idx]
+            if (cachedStr !is String) {
+                cachedStr = buildTabsForIdx(idx)
+            }
+            return cachedStr
+        }
+
+        fun nameOfHeapObject(heapObject: HeapObject): String {
+            return when (heapObject) {
+                is HeapObject.HeapClass -> heapObject.asClass.toString()
+                is HeapObject.HeapInstance -> heapObject.asInstance.toString()
+                is HeapObject.HeapObjectArray -> heapObject.asObjectArray.toString()
+                is HeapObject.HeapPrimitiveArray -> heapObject.asPrimitiveArray.toString()
+                else -> "未识别的类型"
+            }
+        }
+
+        /**
+         * 计算shallowSize
+         */
+        private var shallowSizeCalculator: ShallowSizeCalculator? = null
+        fun calculateShallowSizeOfObjectId(heapGraph: HeapGraph, objectId: Long): Int {
+            if (shallowSizeCalculator == null) shallowSizeCalculator = ShallowSizeCalculator(heapGraph)
+            return (shallowSizeCalculator as ShallowSizeCalculator).computeShallowSize(objectId)
+        }
     }
 
     private lateinit var mImageViewHprof: ImageView
@@ -41,49 +74,37 @@ class SecondActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.second_activity)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M)
+            requirePermissions()
         mImageViewHprof = findViewById(R.id.iv_test)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
             mImageViewHprof.setImageDrawable(resources.getDrawable(R.drawable.test, null))
+            cachedImageView = mImageViewHprof
+        }
         findViewById<Button>(R.id.analyze).setOnClickListener {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M)
-                checkPermissionAndRun(HprofTask.Analyze)
-            else
-                analyzeHprof()
+            analyzeHprof()
         }
 
         findViewById<Button>(R.id.create_bitmap).setOnClickListener {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M)
-                checkPermissionAndRun(HprofTask.CreateBitmap)
-            else
-                createBitmapFromHprof()
+            createBitmapFromHprof()
         }
 
         findViewById<Button>(R.id.find_all_bitmaps).setOnClickListener {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M)
-                checkPermissionAndRun(HprofTask.FindAllBitmapInfo)
-            else
-                findBigInstanceInfo()
+            findInstancesOfClass()
+        }
+
+        findViewById<Button>(R.id.reference_queue_for_id).setOnClickListener {
+            findSpecificReference()
         }
     }
 
     private val permissionRequestCode = 10000
 
     @RequiresApi(Build.VERSION_CODES.M)
-    private fun checkPermissionAndRun(hprofTask: HprofTask) {
-        if (ContextCompat.checkSelfPermission(this@SecondActivity, Manifest.permission.READ_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED &&
-                ContextCompat.checkSelfPermission(this@SecondActivity, Manifest.permission.WRITE_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED) {
-            when (hprofTask) {
-                HprofTask.Analyze -> analyzeHprof()
-                HprofTask.CreateBitmap -> createBitmapFromHprof()
-                HprofTask.FindAllBitmapInfo -> findBigInstanceInfo()
-            }
-        } else {
+    private fun requirePermissions() {
+        if (ContextCompat.checkSelfPermission(this@SecondActivity, Manifest.permission.READ_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED ||
+                ContextCompat.checkSelfPermission(this@SecondActivity, Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
             requestPermissions(arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE, Manifest.permission.WRITE_EXTERNAL_STORAGE), permissionRequestCode);
-        }
-    }
-
-    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
-        if (requestCode == permissionRequestCode) {
         }
     }
 
@@ -134,9 +155,9 @@ class SecondActivity : Activity() {
                 proguardMapping = null
         )
 
-//        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT)
-//            readHprof()
         print(sharkResult)
+        @ForTest
+        logStatistics(Arrays.toString(AndroidObjectInspectors.checkingViewIds.toArray()))
     }
 
     @RequiresApi(Build.VERSION_CODES.KITKAT)
@@ -185,69 +206,26 @@ class SecondActivity : Activity() {
         }
     }
 
-    private fun findBigInstanceInfo() {
-        PathFinder.resetAll()
-        val hprofFile = File("/sdcard/testHprof.hprof")
-        val proguardMappingFile = File("/sdcard/mapping.txt")
-        val proguardMappingInputStream = FileInputStream(proguardMappingFile)
-        val proguardMappingReader = ProguardMappingReader(proguardMappingInputStream)
-        val heapGraph = hprofFile.openHeapGraph(proguardMappingReader.readProguardMapping())
-        @ForTest
-        logStatistics("class size: ${heapGraph.classCount}")
-        logStatistics("class size: ${heapGraph.instanceCount}")
+    private fun findSpecificReference() {
+        val hprofUtility = getHprofUtility()
 
-//        Logger.logAnalyzeFlow("buildFullDominatorTree: dominated.size is ${heapGraph.path .size}")
-        @ForTest
-        cachedHeapGraph = heapGraph
-        /**
-         * 该方法耗时长，需要缓存起来
-         */
-        mapIdToNativeSizes = AndroidNativeSizeMapper(heapGraph).mapNativeSizes()
-        topTopCountInstancesReferenceQueue(heapGraph, mapIdToNativeSizes, "android.graphics.Bitmap", 30)
-//        topTopCountInstancesReferenceQueue(heapGraph, mapIdToNativeSizes, "android.app.Activity", 5)
-//        topTopCountInstancesReferenceQueue(heapGraph, mapIdToNativeSizes, "android.app.Fragment", 5)
-//        topTopCountInstancesReferenceQueue(heapGraph, mapIdToNativeSizes,"androidx.fragment.app.Fragment", 5)
+        val viewIds = Cache.imageIds
+        val instanceList = ArrayList<HeapObject.HeapInstance>()
+        for (viewId in viewIds) {
+            instanceList.add(hprofUtility.heapGraph.findObjectById(viewId) as HeapObject.HeapInstance)
+        }
+        referenceQueues(hprofUtility.heapGraph, hprofUtility.pathFinder, "android.view.View", hprofUtility.mapIdToNativeSizes, instanceList)
     }
 
-    companion object {
-        lateinit var mapIdToNativeSizes: Map<Long, Int>
-        private val cachedTabs = ArrayMap<Int, String>()
+    private fun findInstancesOfClass() {
+        val hprofUtility = getHprofUtility()
 
-        private fun buildTabsForIdx(idx: Int): String {
-            var result = ""
-            for (i in 0 until idx)
-                result += " "
-            return "$result↳"
-        }
+        val className = "android.graphics.Bitmap"
+        val heapClass = getHeapClassForName(hprofUtility.heapGraph, className)
+        val instanceList = ArrayList<HeapObject.HeapInstance>(heapClass.instances.toList())
+        logStatistics("find ${instanceList.size} instances of $className")
 
-        fun getTabsForIdx(idx: Int): String {
-            var cachedStr = cachedTabs[idx]
-            if (cachedStr !is String) {
-                cachedStr = buildTabsForIdx(idx)
-            }
-            return cachedStr
-        }
-
-        fun nameOfHeapObject(heapObject: HeapObject): String {
-            return when (heapObject) {
-                is HeapObject.HeapClass -> heapObject.asClass.toString()
-                is HeapObject.HeapInstance -> heapObject.asInstance.toString()
-                is HeapObject.HeapObjectArray -> heapObject.asObjectArray.toString()
-                is HeapObject.HeapPrimitiveArray -> heapObject.asPrimitiveArray.toString()
-                else -> "未识别的类型"
-            }
-        }
-
-        /**
-         * 计算shallowSize
-         */
-        private var shallowSizeCalculator: ShallowSizeCalculator? = null
-        fun calculateShallowSizeOfObjectId(heapGraph: HeapGraph, objectId: Long): Int {
-            if (shallowSizeCalculator == null) shallowSizeCalculator = ShallowSizeCalculator(heapGraph)
-            return (shallowSizeCalculator as ShallowSizeCalculator).computeShallowSize(objectId)
-        }
-
-        private var cachedHeapGraph: HeapGraph? = null
+        referenceQueues(hprofUtility.heapGraph, hprofUtility.pathFinder, className, hprofUtility.mapIdToNativeSizes, instanceList, 30, true)
     }
 
     private val mapClassNameToHeapClass = ArrayMap<String, HeapObject.HeapClass>()
@@ -266,21 +244,10 @@ class SecondActivity : Activity() {
      * @Why("多个className同时分析可能导致引用链查找失败")
      * private fun topTopCountInstancesReferenceQueue(heapGraph: HeapGraph, classNames: List<String>, mapIdToSizes: Map<Long, Int>, topCount: Int) {
      */
-    private fun topTopCountInstancesReferenceQueue(heapGraph: HeapGraph, mapIdToNativeSizes: Map<Long, Int>, className: String, topCount: Int) {
-        val pathFinder = PathFinder(
-                heapGraph,
-                OnAnalysisProgressListener.NO_OP,
-                AndroidReferenceMatchers.appDefaults
-        )
-
+    private fun referenceQueues(heapGraph: HeapGraph, pathFinder: PathFinder, className: String, mapIdToNativeSizes: Map<Long, Int>, heapInstanceList: ArrayList<HeapObject.HeapInstance>, topCount: Int = -1, needSort: Boolean = false) {
         val instanceIdToInstances = ArrayMap<Long, InstanceInfo>()
-        val heapClass = getHeapClassForName(heapGraph, className)
 
-        /**
-         * 对所有实例排序
-         */
-        val allInstancesOfThisClass = ArrayList<HeapObject.HeapInstance>(heapClass.instances.toList())
-        for (instance in allInstancesOfThisClass) {
+        for (instance in heapInstanceList) {
             val instanceId = instance.objectId
             val nativeSize = mapIdToNativeSizes[instanceId]
             val nativeSizeFinal = if (nativeSize is Int) nativeSize else 0
@@ -288,15 +255,20 @@ class SecondActivity : Activity() {
             val retainedSize = nativeSizeFinal + shallowSize
             instanceIdToSizes[instanceId] = InstanceIdWithSizes(instanceId, nativeSizeFinal, shallowSize, retainedSize)
         }
-        val allInstanceIdWithSizes = instanceIdToSizes.values.sortedWith(RetainedSizeComparator())
 
-        logStatistics("find ${allInstancesOfThisClass.size} instances of $className")
+        /**
+         * 对所有实例排序
+         */
+        val allInstanceIdWithSizes: ArrayList<InstanceIdWithSizes> = if (needSort)
+            ArrayList<InstanceIdWithSizes>().apply { addAll(instanceIdToSizes.values.sortedWith(RetainedSizeComparator())) }
+        else
+            ArrayList<InstanceIdWithSizes>().apply { addAll(instanceIdToSizes.values) }
 
         /**
          * 找到topTopCount实例的引用链
          */
         allInstanceIdWithSizes.forEachIndexed { idx, instanceIdWithSizes ->
-            if (idx > topCount - 1) {
+            if (topCount != -1 && idx > topCount - 1) {
                 return@forEachIndexed
             }
             val instanceId = instanceIdWithSizes.objectId
