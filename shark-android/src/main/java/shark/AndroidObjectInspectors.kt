@@ -45,7 +45,6 @@ enum class AndroidObjectInspectors : ObjectInspector {
         override val leakingObjectFilter = { heapObject: HeapObject ->
             if (heapObject is HeapInstance && heapObject instanceOf "android.view.View") {
                 checkingViewIds.add(heapObject.objectId)
-                println("hprofStatistics: >> ${heapObject.objectId}")
                 // Leaking if null parent or non view parent.
                 val viewParent = heapObject["android.view.View", "mParent"]!!.valueAsInstance
                 val isParentlessView = viewParent == null

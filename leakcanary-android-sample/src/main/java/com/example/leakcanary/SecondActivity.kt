@@ -207,10 +207,11 @@ class SecondActivity : Activity() {
         }
     }
 
+
     private fun findSpecificReference() {
         val hprofUtility = getHprofUtility()
 
-        val viewIds = Cache.imageIds
+        val viewIds = Cache.leakingIds
         val instanceList = ArrayList<HeapObject.HeapInstance>()
         for (viewId in viewIds) {
             instanceList.add(hprofUtility.heapGraph.findObjectById(viewId) as HeapObject.HeapInstance)
@@ -359,7 +360,7 @@ class SecondActivity : Activity() {
             var referenceQueue: ReferenceQueue<String> = ReferenceQueue()
     ) {
         override fun toString(): String {
-            return "InstanceInfo: topIndex=$topIndex, className='$className', objectId=$objectId, nativeSize=$nativeSize, shallowSize=$shallowSize, retainedSize=$retainedSize, gcRootCount=$gcRootCount, referenceQueue=\n$referenceQueue"
+            return "leakingInfo: className='$className', objectId=$objectId, nativeSize=$nativeSize, shallowSize=$shallowSize, retainedSize=$retainedSize, gcRootCount=$gcRootCount, referenceQueue=\n$referenceQueue"
         }
 
         class ReferenceQueue<E> : LinkedList<E>() {

@@ -32,6 +32,7 @@ import shark.internal.ReferencePathNode.*
 import java.io.File
 import java.util.*
 import java.util.concurrent.TimeUnit.NANOSECONDS
+import kotlin.collections.ArrayList
 
 /**
  * Analyzes heap dumps to look for leaks.
@@ -148,7 +149,7 @@ class HeapAnalyzer constructor(
         listener.onAnalysisProgress(FINDING_RETAINED_OBJECTS)
         @Doc("根据策略找出graph中所有的泄露对象的id，{FilteringLeakingObjectFinder} and {AndroidObjectInspectors.appLeakingObjectFilters}")
         val leakingObjectIds = leakingObjectFinder.findLeakingObjectIds(graph)
-
+        println("leakingIds:" + leakingObjectIds.toLongArray().contentToString())
         val (applicationLeaks, libraryLeaks, unreachableObjects) = findLeaks(leakingObjectIds)
 
         return HeapAnalysisSuccess(
@@ -173,6 +174,7 @@ class HeapAnalyzer constructor(
         val pathFindingResults = pathFinder.findPathsFromGcRoots(leakingObjectIds, computeRetainedHeapSize)
         val unreachableObjects = findUnreachableObjects(pathFindingResults, leakingObjectIds)
         val shortestPaths = deduplicateShortestPaths(pathFindingResults.pathsToLeakingObjects)
+        printShortPaths(shortestPaths)
         val inspectedObjectsByPath = inspectObjects(shortestPaths)
 
         @Doc("对象实例占用大小")
@@ -185,7 +187,58 @@ class HeapAnalyzer constructor(
         val (applicationLeaks, libraryLeaks) = buildLeakTraces(
                 shortestPaths, inspectedObjectsByPath, retainedSizes
         )
+
+        printLeakTraces(applicationLeaks)
+        printLeakTraces(libraryLeaks)
+
         return LeaksAndUnreachableObjects(applicationLeaks, libraryLeaks, unreachableObjects)
+    }
+
+    private fun FindLeakInput.printShortPaths(shortestPaths: List<ShortestPath>) {
+        Logger.logStatistics("printShortPaths start > ${shortestPaths.size}")
+        val leakIds = java.util.ArrayList<Long>()
+        shortestPaths.forEach { shortestPath ->
+            Logger.logStatistics("pathSize: ${shortestPath.childPath.size}")
+            val referenceQueue = ArrayList<String>()
+
+            shortestPath.childPath.forEachIndexed { idx, childNode ->
+                val nodeInstanceId = childNode.objectId
+                val instance = graph.findObjectById(nodeInstanceId)
+                var instanceName = nameOfHeapObject(instance)
+                val nodeOwningClassId = childNode.owningClassId
+                Logger.logStatistics("instanceName: $instanceName")
+
+                if (nodeOwningClassId != 0L) {
+                    val owingClassName = (graph as HprofHeapGraph).index.className(nodeOwningClassId)
+                    instanceName += " | owning by $owingClassName"
+                }
+
+                referenceQueue.add("$instanceName \n")
+            }
+        }
+        Logger.logStatistics("printShortPaths end")
+    }
+
+    fun nameOfHeapObject(heapObject: HeapObject): String {
+        return when (heapObject) {
+            is HeapObject.HeapClass -> heapObject.asClass.toString()
+            is HeapObject.HeapInstance -> heapObject.asInstance.toString()
+            is HeapObject.HeapObjectArray -> heapObject.asObjectArray.toString()
+            is HeapObject.HeapPrimitiveArray -> heapObject.asPrimitiveArray.toString()
+            else -> "未识别的类型"
+        }
+    }
+
+    private fun printLeakTraces(leakTraces: List<Leak>) {
+        Logger.logStatistics("printLeakTraces start > ${leakTraces.size}")
+        for (leakTrace in leakTraces) {
+            for (leakTrace in leakTrace.leakTraces) {
+                for (leakTraceReference in leakTrace.referencePath) {
+
+                }
+            }
+        }
+        Logger.logStatistics("printLeakTraces end")
     }
 
     private fun FindLeakInput.findUnreachableObjects(
