@@ -211,10 +211,10 @@ class SecondActivity : Activity() {
     private fun findSpecificReference() {
         val hprofUtility = getHprofUtility()
 
-        val viewIds = Cache.leakingIds
+        val ids = Cache.testIds
         val instanceList = ArrayList<HeapObject.HeapInstance>()
-        for (viewId in viewIds) {
-            instanceList.add(hprofUtility.heapGraph.findObjectById(viewId) as HeapObject.HeapInstance)
+        for (id in ids) {
+            instanceList.add(hprofUtility.heapGraph.findObjectById(id) as HeapObject.HeapInstance)
         }
         referenceQueues(hprofUtility.heapGraph, hprofUtility.pathFinder, null, hprofUtility.mapIdToNativeSizes, instanceList)
     }
@@ -314,6 +314,9 @@ class SecondActivity : Activity() {
 
         shortestPaths.forEach { shortestPath ->
             val referenceQueue = InstanceInfo.ReferenceQueue<String>()
+            val rootInstance = heapGraph.findObjectById(shortestPath.root.gcRoot.id)
+            val rootInstanceName = nameOfHeapObject(rootInstance)
+            referenceQueue.add("$rootInstanceName(gcRoot) \n")
 
             shortestPath.childPath.forEachIndexed { idx, childNode ->
                 val nodeInstanceId = childNode.objectId
@@ -331,12 +334,7 @@ class SecondActivity : Activity() {
                 if (shortestPath.childPath.size - 1 == idx) {
                     for (instanceIdToInstance in instanceIdToInstances) {
                         val objectId = instanceIdToInstance.key
-                        val objectIdOfLastNode = shortestPath.childPath[idx].objectId
-
-                        if (objectId == objectIdOfLastNode) {
-                            instanceIdToInstances[objectId]?.referenceQueue = referenceQueue
-                            break
-                        }
+                        instanceIdToInstances[objectId]?.referenceQueue = referenceQueue
                     }
                 }
             }
@@ -360,7 +358,7 @@ class SecondActivity : Activity() {
             var referenceQueue: ReferenceQueue<String> = ReferenceQueue()
     ) {
         override fun toString(): String {
-            return "leakingInfo: className='$className', objectId=$objectId, nativeSize=$nativeSize, shallowSize=$shallowSize, retainedSize=$retainedSize, gcRootCount=$gcRootCount, referenceQueue=\n$referenceQueue"
+            return "InstanceInfo: topIndex=$topIndex, className='$className', objectId=$objectId, nativeSize=$nativeSize, shallowSize=$shallowSize, retainedSize=$retainedSize, gcRootCount=$gcRootCount, referenceQueue=\n$referenceQueue"
         }
 
         class ReferenceQueue<E> : LinkedList<E>() {

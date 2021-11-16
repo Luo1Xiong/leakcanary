@@ -30,9 +30,7 @@ import shark.internal.*
 import shark.internal.PathFinder.PathFindingResults
 import shark.internal.ReferencePathNode.*
 import java.io.File
-import java.util.*
 import java.util.concurrent.TimeUnit.NANOSECONDS
-import kotlin.collections.ArrayList
 
 /**
  * Analyzes heap dumps to look for leaks.
@@ -173,9 +171,15 @@ class HeapAnalyzer constructor(
         val pathFinder = PathFinder(graph, listener, referenceMatchers)
         val pathFindingResults = pathFinder.findPathsFromGcRoots(leakingObjectIds, computeRetainedHeapSize)
         val unreachableObjects = findUnreachableObjects(pathFindingResults, leakingObjectIds)
+        println("shortPathsCount before filter > ${pathFindingResults.pathsToLeakingObjects.size}")
         val shortestPaths = deduplicateShortestPaths(pathFindingResults.pathsToLeakingObjects)
+        println("shortPathsCount after filter > ${shortestPaths.size}")
+        for (shortestPath in shortestPaths) {
+            println("shortPathsCount root: > ${nameOfHeapObject(graph.findObjectById(shortestPath.root.gcRoot.id))}")
+        }
         printShortPaths(shortestPaths)
         val inspectedObjectsByPath = inspectObjects(shortestPaths)
+        println("shortPathsCount after inspect > ${inspectedObjectsByPath.size}")
 
         @Doc("对象实例占用大小")
         val retainedSizes =
@@ -187,6 +191,9 @@ class HeapAnalyzer constructor(
         val (applicationLeaks, libraryLeaks) = buildLeakTraces(
                 shortestPaths, inspectedObjectsByPath, retainedSizes
         )
+        println("shortPathsCount for applicationLeaks > ${applicationLeaks.size}")
+        println("shortPathsCount for libraryLeaks > ${libraryLeaks.size}")
+        println("shortPathsCount for unreachableObjects > ${unreachableObjects.size}")
 
         printLeakTraces(applicationLeaks)
         printLeakTraces(libraryLeaks)
@@ -195,7 +202,7 @@ class HeapAnalyzer constructor(
     }
 
     private fun FindLeakInput.printShortPaths(shortestPaths: List<ShortestPath>) {
-        Logger.logStatistics("printShortPaths start > ${shortestPaths.size}")
+        println("printShortPaths start")
         val leakIds = java.util.ArrayList<Long>()
         shortestPaths.forEach { shortestPath ->
             Logger.logStatistics("pathSize: ${shortestPath.childPath.size}")
@@ -216,7 +223,7 @@ class HeapAnalyzer constructor(
                 referenceQueue.add("$instanceName \n")
             }
         }
-        Logger.logStatistics("printShortPaths end")
+        println("printShortPaths end")
     }
 
     fun nameOfHeapObject(heapObject: HeapObject): String {
@@ -293,9 +300,7 @@ class HeapAnalyzer constructor(
     }
 
     companion object {
-        fun deduplicateShortestPaths(
-                inputPathResults: List<ReferencePathNode>
-        ): List<ShortestPath> {
+        fun deduplicateShortestPaths(inputPathResults: List<ReferencePathNode>): List<ShortestPath> {
             val rootTrieNode = ParentNode(0)
 
             inputPathResults.forEach { pathNode ->
@@ -388,8 +393,7 @@ class HeapAnalyzer constructor(
         listener.onAnalysisProgress(BUILDING_LEAK_TRACES)
 
         val applicationLeaksMap = mutableMapOf<String, MutableList<LeakTrace>>()
-        val libraryLeaksMap =
-                mutableMapOf<String, Pair<LibraryLeakReferenceMatcher, MutableList<LeakTrace>>>()
+        val libraryLeaksMap = mutableMapOf<String, Pair<LibraryLeakReferenceMatcher, MutableList<LeakTrace>>>()
 
         shortestPaths.forEachIndexed { pathIndex, shortestPath ->
             val inspectedObjects = inspectedObjectsByPath[pathIndex]
@@ -412,11 +416,11 @@ class HeapAnalyzer constructor(
 
             if (firstLibraryLeakNode != null) {
                 val matcher = firstLibraryLeakNode.matcher
-                val signature: String = matcher.pattern.toString()
-                        .createSHA1Hash()
-                libraryLeaksMap.getOrPut(signature) { matcher to mutableListOf() }
-                        .second += leakTrace
+                val signature: String = matcher.pattern.toString().createSHA1Hash()
+                println("shortPathsCount ? libraryLeakNode:$pathIndex - $signature")
+                libraryLeaksMap.getOrPut(signature) { matcher to mutableListOf() }.second += leakTrace
             } else {
+                println("shortPathsCount ? applicationLeak:$pathIndex - ${leakTrace.signature}")
                 applicationLeaksMap.getOrPut(leakTrace.signature) { mutableListOf() } += leakTrace
             }
         }

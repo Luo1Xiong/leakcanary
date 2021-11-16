@@ -195,7 +195,6 @@ enum class AndroidObjectInspectors : ObjectInspector {
                 reporter: ObjectReporter
         ) {
             reporter.whenInstanceOf("android.app.Activity") { instance ->
-                print("inspectForActivity$instance")
                 // Activity.mDestroyed was introduced in 17.
                 // https://android.googlesource.com/platform/frameworks/base/+
                 // /6d9dcbccec126d9b87ab6587e686e28b87e5a04d
@@ -408,7 +407,6 @@ enum class AndroidObjectInspectors : ObjectInspector {
                 reporter: ObjectReporter
         ) {
             reporter.whenInstanceOf("android.app.Fragment") { instance ->
-                print("inspectForFragment$instance")
                 val fragmentManager = instance["android.app.Fragment", "mFragmentManager"]!!
                 if (fragmentManager.value.isNullReference) {
                     leakingReasons += fragmentManager describedWithValue "null"
