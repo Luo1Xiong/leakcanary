@@ -15,7 +15,6 @@ import shark.HprofRecord.HeapDumpRecord.HeapDumpInfoRecord
 import shark.HprofRecord.HeapDumpRecord.ObjectRecord.*
 import shark.HprofRecord.HeapDumpRecord.ObjectRecord.PrimitiveArrayDumpRecord.*
 import shark.OnHprofRecordListener
-import shark.PrettyLogger
 import shark.StreamingHprofReader
 import shark.StreamingRecordReaderAdapter.Companion.asStreamingRecordReader
 import java.io.File
@@ -43,7 +42,6 @@ object HeapDumpRenderer {
              */
             sourceBytesPerPixel: Int
     ): Bitmap = with(HasDensity(context.resources)) {
-        PrettyLogger.invokeTrack()
         val recordPositions = mutableListOf<Pair<Int, Long>>()
         var currentRecord: HprofRecord? = null
 

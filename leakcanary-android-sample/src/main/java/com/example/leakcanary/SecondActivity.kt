@@ -104,7 +104,8 @@ class SecondActivity : Activity() {
     @RequiresApi(Build.VERSION_CODES.M)
     private fun requirePermissions() {
         if (ContextCompat.checkSelfPermission(this@SecondActivity, Manifest.permission.READ_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED ||
-                ContextCompat.checkSelfPermission(this@SecondActivity, Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
+            ContextCompat.checkSelfPermission(this@SecondActivity, Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED
+        ) {
             requestPermissions(arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE, Manifest.permission.WRITE_EXTERNAL_STORAGE), permissionRequestCode);
         }
     }
@@ -123,8 +124,8 @@ class SecondActivity : Activity() {
     }
 
     fun savePng(
-            imageFile: File,
-            source: Bitmap
+        imageFile: File,
+        source: Bitmap
     ): Boolean {
         var outStream: FileOutputStream? = null
         return try {
@@ -147,13 +148,13 @@ class SecondActivity : Activity() {
         val heapAnalyzer = HeapAnalyzer(OnAnalysisProgressListener { step -> Log.i("sharkAnalyzer", "onAnalysisProgress:$step : ${Thread.currentThread()}") })
 
         val sharkResult = heapAnalyzer.analyze(
-                heapDumpFile = hprofFile,
-                leakingObjectFinder = FilteringLeakingObjectFinder(AndroidObjectInspectors.appLeakingObjectFilters),
-                referenceMatchers = AndroidReferenceMatchers.appDefaults,
-                computeRetainedHeapSize = true,
-                objectInspectors = AndroidObjectInspectors.appDefaults,
-                metadataExtractor = AndroidMetadataExtractor,
-                proguardMapping = null
+            heapDumpFile = hprofFile,
+            leakingObjectFinder = FilteringLeakingObjectFinder(AndroidObjectInspectors.appLeakingObjectFilters),
+            referenceMatchers = AndroidReferenceMatchers.appDefaults,
+            computeRetainedHeapSize = true,
+            objectInspectors = AndroidObjectInspectors.appDefaults,
+            metadataExtractor = AndroidMetadataExtractor,
+            proguardMapping = null
         )
 
         print(sharkResult)
@@ -190,10 +191,12 @@ class SecondActivity : Activity() {
 
     val instanceIdToSizes = ArrayMap<Long, InstanceIdWithSizes>()
 
-    class InstanceIdWithSizes(val objectId: Long,
-                              val nativeSize: Int = 0,
-                              val shallowSize: Int = 0,
-                              val retainedSize: Int = 0)
+    class InstanceIdWithSizes(
+        val objectId: Long,
+        val nativeSize: Int = 0,
+        val shallowSize: Int = 0,
+        val retainedSize: Int = 0
+    )
 
     class RetainedSizeComparator : Comparator<InstanceIdWithSizes> {
         override fun compare(o1: InstanceIdWithSizes, o2: InstanceIdWithSizes): Int {
@@ -211,7 +214,7 @@ class SecondActivity : Activity() {
     private fun findSpecificReference() {
         val hprofUtility = getHprofUtility()
 
-        val ids = Cache.testIds
+        val ids = Cache.testId
         val instanceList = ArrayList<HeapObject.HeapInstance>()
         for (id in ids) {
             instanceList.add(hprofUtility.heapGraph.findObjectById(id) as HeapObject.HeapInstance)
@@ -221,13 +224,45 @@ class SecondActivity : Activity() {
 
     private fun findInstancesOfClass() {
         val hprofUtility = getHprofUtility()
-
         val className = "android.graphics.Bitmap"
         val heapClass = getHeapClassForName(hprofUtility.heapGraph, className)
         val instanceList = ArrayList<HeapObject.HeapInstance>(heapClass.instances.toList())
-        logStatistics("find ${instanceList.size} instances of $className")
+        // 5655832 = 1547 x 914 x 4
 
-        referenceQueues(hprofUtility.heapGraph, hprofUtility.pathFinder, className, hprofUtility.mapIdToNativeSizes, instanceList, 30, true)
+        val primitiveArrays = hprofUtility.heapGraph.primitiveArrays.toList()
+        val sortedPrimitiveArrays = primitiveArrays.sortedWith(PrimitiveArrayComparator())
+
+//        val typesStatistics = hashMapOf<PrimitiveType, Long>()
+//        sortedPrimitiveArrays.forEachIndexed { index, heapPrimitiveArray ->
+//            val oldCount = typesStatistics[heapPrimitiveArray.primitiveType]
+//            if (oldCount !is Long)
+//                typesStatistics[heapPrimitiveArray.primitiveType] = 1
+//            else
+//                typesStatistics[heapPrimitiveArray.primitiveType] = oldCount + 1
+//        }
+//        for (typesStatistic in typesStatistics) {
+//            println("tttttttttest: ${typesStatistic.key} | ${typesStatistic.value}")
+//        }
+        var count = 0
+        val sortedByteArrays = mutableListOf<HeapObject.HeapPrimitiveArray>()
+        for (sortedPrimitiveArray in sortedPrimitiveArrays) {
+            if (sortedPrimitiveArray.primitiveType == PrimitiveType.BYTE) {
+                if (++count > 10) break
+                sortedByteArrays.add(sortedPrimitiveArray)
+            }
+        }
+        for (sortedByteArray in sortedByteArrays) {
+            println("tttttttttest: find a byteArray with ${sortedByteArray.readByteSize()} bytes  | ${sortedByteArray.primitiveType}")
+        }
+//        logStatistics("find ${instanceList.size} instances of $className")
+//
+//        referenceQueues(hprofUtility.heapGraph, hprofUtility.pathFinder, className, hprofUtility.mapIdToNativeSizes, instanceList, 30, true)
+    }
+
+    class PrimitiveArrayComparator : Comparator<HeapObject.HeapPrimitiveArray> {
+        override fun compare(o1: HeapObject.HeapPrimitiveArray, o2: HeapObject.HeapPrimitiveArray): Int {
+            return o2.readByteSize() - o1.readByteSize()
+        }
     }
 
     private val mapClassNameToHeapClass = ArrayMap<String, HeapObject.HeapClass>()
@@ -348,14 +383,14 @@ class SecondActivity : Activity() {
     }
 
     class InstanceInfo(
-            val topIndex: Int,
-            var className: String = "",
-            var objectId: Long,
-            var nativeSize: Int = 0,
-            var shallowSize: Int = 0,
-            var retainedSize: Int = 0,
-            var gcRootCount: Int = 0, // 可达到该实例的gcRoot数量
-            var referenceQueue: ReferenceQueue<String> = ReferenceQueue()
+        val topIndex: Int,
+        var className: String = "",
+        var objectId: Long,
+        var nativeSize: Int = 0,
+        var shallowSize: Int = 0,
+        var retainedSize: Int = 0,
+        var gcRootCount: Int = 0, // 可达到该实例的gcRoot数量
+        var referenceQueue: ReferenceQueue<String> = ReferenceQueue()
     ) {
         override fun toString(): String {
             return "InstanceInfo: topIndex=$topIndex, className='$className', objectId=$objectId, nativeSize=$nativeSize, shallowSize=$shallowSize, retainedSize=$retainedSize, gcRootCount=$gcRootCount, referenceQueue=\n$referenceQueue"

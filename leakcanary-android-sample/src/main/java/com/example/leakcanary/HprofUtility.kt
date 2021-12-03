@@ -41,7 +41,7 @@ class HprofUtility private constructor(var heapGraph: HeapGraph, var mapIdToNati
 
         fun getHprofUtility(): HprofUtility {
             if (gHprofUtility is HprofUtility) return gHprofUtility as HprofUtility
-            val hprofFile = File("/sdcard/testHprof.hprof")
+            val hprofFile = File("/sdcard/testHprofBitmap.hprof")
             val mappingFile = File("/sdcard/mapping.txt")
             return buildHprofUtility(hprofFile, mappingFile)
         }

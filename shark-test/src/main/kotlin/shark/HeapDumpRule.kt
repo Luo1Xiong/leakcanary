@@ -25,3 +25,26 @@ class HeapDumpRule : ExternalResource() {
         return hprof
     }
 }
+
+fun main() {
+
+    testBreak()
+}
+
+fun testBreak() {
+    val list = arrayListOf<String>().apply {
+        add("a")
+        add("b")
+        add("c")
+    }
+
+    list.run {
+        forEach { value ->
+            println("run : $value start")
+            if (value == "b") return@run
+            println("run : $value finished")
+        }
+    }
+
+    println("run finished")
+}
